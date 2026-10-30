@@ -1,0 +1,30 @@
+name: build-search-index
+on:
+  schedule:
+    - cron: '17 * * * *'   # каждый час в :17 (UTC); не на :00 — меньше задержек
+  workflow_dispatch:        # ручной запуск кнопкой
+permissions:
+  contents: write           # только запись в этот репозиторий
+concurrency:
+  group: build-index
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # без сторонних actions: только git и python, которые уже есть на сервере GitHub
+      - name: Получить репозиторий
+        run: git clone --depth 1 "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" repo
+      - name: Собрать индекс
+        working-directory: repo
+        run: python3 -I scripts/build.py docs
+      - name: Опубликовать
+        working-directory: repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs
+          git diff --cached --quiet && { echo "без изменений"; exit 0; }
+          git commit -q -m "index $(date -u +%FT%TZ)"
+          git push -q
